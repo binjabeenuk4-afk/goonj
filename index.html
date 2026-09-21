@@ -1,0 +1,87 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goonj — Free Voice Studio | Free AI Text to Speech</title>
+<meta name="description" content="Goonj is a free, unlimited AI voice studio that runs 100% in your browser. Turn text into natural speech with 70+ voices including Urdu, English and Hindi. No signup, no API key, no paywall.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true">🔊</span><div><h1>Goonj</h1><p>Free Voice Studio</p></div></div>
+  <nav class="tabs" aria-label="Modes">
+    <button class="tab active" data-tab="studio">Studio</button>
+    <button class="tab" data-tab="podcast">Podcast</button>
+    <button class="tab" data-tab="clone">Voice Cloning</button>
+  </nav>
+</header>
+<main>
+  <section class="hero">
+    <h2>Text to speech, free forever.</h2>
+    <p>No signup. No API key. No paywall. Everything runs right here in your browser.</p>
+  </section>
+
+  <section id="tab-studio" class="panel">
+    <div class="card">
+      <div class="row">
+        <label class="grow">Voice<select id="voiceSelect"></select></label>
+        <label class="slider">Speed <span id="rateVal">0%</span><input type="range" id="rateRange" min="-50" max="50" value="0"></label>
+        <label class="slider">Pitch <span id="pitchVal">0%</span><input type="range" id="pitchRange" min="-50" max="50" value="0"></label>
+      </div>
+      <label class="block">Text<textarea id="textInput" rows="8" placeholder="Type or paste text here…"></textarea></label>
+      <div class="chips"><span class="chips-label">Expression markers:</span>
+        <button data-m="[sans]">[sans] breath</button>
+        <button data-m="[ruko]">[ruko] pause</button>
+        <button data-m="[hansna]">[hansna] laugh</button>
+        <button data-m="[rona]">[rona] cry</button>
+        <button data-m="[ahista]">[ahista] slow</button>
+        <button data-m="[tez]">[tez] fast</button>
+        <button data-m="[normal]">[normal]</button>
+      </div>
+      <p class="hint">[sans] short pause · [ruko] long pause · [ahista]/[tez] slow/fast until [normal]. Laugh/cry are expressive approximations (pitch + tempo), not literal sounds.</p>
+      <div class="row">
+        <button id="sampleUrdu" class="ghost">Try Urdu sample</button>
+        <button id="sampleEnglish" class="ghost">Try English sample</button>
+        <button id="generateBtn" class="primary">Generate Speech</button>
+      </div>
+      <div class="progress hidden" id="progressWrap"><div class="bar" id="progressBar"></div><span id="progressLabel"></span></div>
+      <p id="status" class="status" role="status"></p>
+      <div id="result" class="hidden">
+        <audio id="player" controls></audio>
+        <div class="row"><p id="fileInfo" class="fileinfo"></p><a id="downloadLink" class="primary btn" download="goonj-tts.mp3">Download MP3</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-podcast" class="panel hidden">
+    <div class="card">
+      <div class="row">
+        <label class="grow">Speaker 1 voice<select id="podVoice1"></select></label>
+        <label class="grow">Speaker 2 voice<select id="podVoice2"></select></label>
+      </div>
+      <label class="block">Script — one line per turn, format <code>Speaker 1: …</code><textarea id="podScript" rows="8" placeholder="Speaker 1: Assalam o Alaikum!&#10;Speaker 2: Welcome to the show."></textarea></label>
+      <div class="row">
+        <button id="podSample" class="ghost">Load sample script</button>
+        <button id="podGenerate" class="primary">Generate Podcast</button>
+      </div>
+      <div class="progress hidden" id="podProgressWrap"><div class="bar" id="podProgressBar"></div><span id="podProgressLabel"></span></div>
+      <p id="podStatus" class="status" role="status"></p>
+      <div id="podResult" class="hidden">
+        <audio id="podPlayer" controls></audio>
+        <div class="row"><p id="podFileInfo" class="fileinfo"></p><a id="podDownloadLink" class="primary btn" download="goonj-podcast.mp3">Download MP3</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-clone" class="panel hidden">
+    <div class="card"><h3>Voice cloning — coming soon</h3>
+    <p>Voice cloning is not part of this build. When it arrives it will be clearly labeled and will never be faked. For now, enjoy 70+ built-in neural voices in the Studio and Podcast tabs.</p></div>
+  </section>
+</main>
+<footer><p>Goonj runs 100% in your browser. Speech is synthesized live over your own connection — no account, no key, no cost.</p></footer>
+<script src="voices.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
