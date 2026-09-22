@@ -7,7 +7,7 @@
    public API URL from Koyeb, e.g. "https://goonj-api-xxxx.koyeb.app".
    It must be https with no trailing slash. The test tunnel URL below is
    already expired/dead — never ship it. */
-const API_BASE = "https://REPLACE-WITH-KOYEB-URL.koyeb.app";
+const API_BASE = "https://goonj-production.up.railway.app";
 
 const $ = id => document.getElementById(id);
 const fmtPct = v => (v >= 0 ? "+" : "") + v + "%";
