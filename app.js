@@ -78,7 +78,7 @@ function textToSsmlBody(text,baseRate,basePitch){
 }
 function buildSsml(text,voice,rate,pitch){
   const body=textToSsmlBody(text,rate,pitch);
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/XMLSchema" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${voiceLang(voice)}"><voice name="${voiceFullName(voice)}">${body}</voice></speak>`;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${voiceLang(voice)}"><voice name="${voiceFullName(voice)}">${body}</voice></speak>`;
 }
 
 /* ---------- one chunk over the wire ---------- */
@@ -90,7 +90,7 @@ function synthesizeChunk(text,voice,rate,pitch){
     const url=`${EDGE_WSS}?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${gec}&Sec-MS-GEC-Version=1-143.0.3650.75&ConnectionId=${connId}`;
     const ts=xTimestamp(),ssml=buildSsml(text,voice,rate,pitch);
     const configMsg=`X-Timestamp:${ts}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"${OUTPUT_FORMAT}"}}}}`;
-    const ssmlMsg=`X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nPath:ssml\r\n\r\n${ssml}`;
+    const ssmlMsg=`X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${ts}Z\r\nPath:ssml\r\n\r\n${ssml}`;
     return new Promise((resolve,reject)=>{
       let done=false,timer=null;const chunks=[];
       const fail=msg=>{if(!done){done=true;clearTimeout(timer);try{ws.close();}catch(e){}reject(new Error(msg));}};
@@ -117,7 +117,7 @@ function synthesizeChunk(text,voice,rate,pitch){
           }
         }
       };
-      ws.onerror=()=>fail(IS_EDGE?"WebSocket error — the speech service refused the connection.":"This browser is blocked by the voice service — please open Goonj in Microsoft Edge (free, preinstalled on Windows).");
+      ws.onerror=()=>fail("WebSocket error — the speech service refused the connection."+(IS_EDGE?"":" (Tip: Microsoft Edge browser works most reliably.)"));
       ws.onclose=e=>{if(!done)fail(`Connection closed before audio completed (code ${e.code}).`);};
     });
   })();
@@ -218,12 +218,6 @@ async function onGeneratePodcast(){
   finally{busy=false;$("podGenerate").disabled=false;}
 }
 document.addEventListener("DOMContentLoaded",()=>{
-  if(!IS_EDGE){
-    const b=document.createElement("div");
-    b.style.cssText="background:#7c2d12;color:#fff;padding:10px 16px;text-align:center;font-weight:600;";
-    b.textContent="Goonj ki awaz sirf Microsoft Edge browser me chalti hai — Chrome/Firefox/Safari ko voice service block kar deta hai. Edge me yehi link kholen (Windows me pehle se installed hai).";
-    document.body.prepend(b);
-  }
   fillVoiceSelect($("voiceSelect"),"ur-PK-AsadNeural");
   fillVoiceSelect($("podVoice1"),"en-US-GuyNeural");
   fillVoiceSelect($("podVoice2"),"en-US-AriaNeural");
