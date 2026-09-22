@@ -5,6 +5,9 @@ const EDGE_WSS="wss://speech.platform.bing.com/consumer/speech/synthesize/readal
 const TRUSTED_CLIENT_TOKEN="6A5AA1D4EAFF4E9FB37E23D68491D6F4";
 const CHUNK_LIMIT=4000, OUTPUT_FORMAT="audio-24khz-48kbitrate-mono-mp3";
 const $=id=>document.getElementById(id);
+/* The free voice service only accepts Microsoft Edge (desktop or mobile).
+   Chrome/Firefox/Safari get a 403 on the WebSocket handshake — no workaround from JS. */
+const IS_EDGE=/Edg/.test(navigator.userAgent||"");
 
 /* ---------- SHA-256 (sync fallback when crypto.subtle is unavailable, e.g. non-secure origins) ---------- */
 function sha256Bytes(bytes){
@@ -114,7 +117,7 @@ function synthesizeChunk(text,voice,rate,pitch){
           }
         }
       };
-      ws.onerror=()=>fail("WebSocket error — the speech service refused the connection.");
+      ws.onerror=()=>fail(IS_EDGE?"WebSocket error — the speech service refused the connection.":"This browser is blocked by the voice service — please open Goonj in Microsoft Edge (free, preinstalled on Windows).");
       ws.onclose=e=>{if(!done)fail(`Connection closed before audio completed (code ${e.code}).`);};
     });
   })();
@@ -215,6 +218,12 @@ async function onGeneratePodcast(){
   finally{busy=false;$("podGenerate").disabled=false;}
 }
 document.addEventListener("DOMContentLoaded",()=>{
+  if(!IS_EDGE){
+    const b=document.createElement("div");
+    b.style.cssText="background:#7c2d12;color:#fff;padding:10px 16px;text-align:center;font-weight:600;";
+    b.textContent="Goonj ki awaz sirf Microsoft Edge browser me chalti hai — Chrome/Firefox/Safari ko voice service block kar deta hai. Edge me yehi link kholen (Windows me pehle se installed hai).";
+    document.body.prepend(b);
+  }
   fillVoiceSelect($("voiceSelect"),"ur-PK-AsadNeural");
   fillVoiceSelect($("podVoice1"),"en-US-GuyNeural");
   fillVoiceSelect($("podVoice2"),"en-US-AriaNeural");
