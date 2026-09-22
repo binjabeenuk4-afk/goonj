@@ -215,7 +215,7 @@ async function onGeneratePodcast(){
   finally{busy=false;$("podGenerate").disabled=false;}
 }
 document.addEventListener("DOMContentLoaded",()=>{
-  fillVoiceSelect($("voiceSelect"),"ur-PK-GulNeural");
+  fillVoiceSelect($("voiceSelect"),"ur-PK-AsadNeural");
   fillVoiceSelect($("podVoice1"),"en-US-GuyNeural");
   fillVoiceSelect($("podVoice2"),"en-US-AriaNeural");
   document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
@@ -229,7 +229,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     const ta=$("textInput"),m=b.getAttribute("data-m"),s=ta.selectionStart??ta.value.length,e=ta.selectionEnd??s;
     ta.value=ta.value.slice(0,s)+" "+m+" "+ta.value.slice(e);ta.focus();
   }));
-  $("sampleUrdu").addEventListener("click",()=>{$("voiceSelect").value="ur-PK-GulNeural";$("textInput").value="Assalam o Alaikum! Yeh Goonj ka test hai. [sans] Goonj ab aap ki awaaz ban sakti hai.";});
+  $("sampleUrdu").addEventListener("click",()=>{$("voiceSelect").value="ur-PK-AsadNeural";$("textInput").value="Assalam o Alaikum! Yeh Goonj ka test hai. [sans] Goonj ab aap ki awaaz ban sakti hai.";});
   $("sampleEnglish").addEventListener("click",()=>{$("voiceSelect").value="en-US-AriaNeural";$("textInput").value="Hello! This is a test of Goonj, the free voice studio. Everything runs right here in your browser.";});
   $("generateBtn").addEventListener("click",onGenerateStudio);
   $("podSample").addEventListener("click",()=>{$("podScript").value="Speaker 1: Assalam o Alaikum and welcome to the Goonj podcast!\nSpeaker 2: Thank you! Today we are testing dual-speaker voices. [sans] It sounds quite natural.\nSpeaker 1: It really does. [ruko] Let us hear how the second voice responds.\nSpeaker 2: I am the second speaker, and I approve this message.";});
