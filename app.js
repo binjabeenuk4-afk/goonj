@@ -29,7 +29,11 @@ function sha256Bytes(bytes){
   return H.map(x=>(x>>>0).toString(16).padStart(8,"0")).join("").toUpperCase();
 }
 async function secMsGec(){
-  const ticks=(BigInt(Date.now())*10000n+116444736000000000n).toString();
+  /* Must match edge-tts DRM.generate_sec_ms_gec exactly: unix seconds rounded
+     DOWN to the nearest 5 minutes, Windows file-time ticks, SHA-256 hex upper. */
+  const unixSec=Math.floor(Date.now()/1000);
+  const rounded=unixSec-(unixSec%300);
+  const ticks=(BigInt(rounded)*10000000n+116444736000000000n).toString();
   const bytes=new TextEncoder().encode(ticks+TRUSTED_CLIENT_TOKEN);
   if(window.crypto&&crypto.subtle){
     const d=await crypto.subtle.digest("SHA-256",bytes);
