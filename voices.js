@@ -1,6 +1,10 @@
 
+
 window.GOONJ_VOICES=[
 {id:"ur-PK-AsadNeural",language:"Urdu (Pakistan)",gender:"Male"},
+{id:"ur-PK-UzmaNeural",language:"Urdu (Pakistan)",gender:"Female"},
+{id:"ur-IN-GulNeural",language:"Urdu (India)",gender:"Female"},
+{id:"ur-IN-SalmanNeural",language:"Urdu (India)",gender:"Male"},
 {id:"en-US-AriaNeural",language:"English (US)",gender:"Female"},
 {id:"en-US-JennyNeural",language:"English (US)",gender:"Female"},
 {id:"en-US-GuyNeural",language:"English (US)",gender:"Male"},
