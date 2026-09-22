@@ -2,4 +2,11 @@ certifi
 edge-tts
 fastapi
 pydantic
+python-multipart  # file uploads for /api/clone
 uvicorn[standard]
+# voice cloning (OpenVoice v2 tone conversion, vendored in backend/openvoice/)
+librosa
+soundfile
+# NOTE: torch/torchaudio are intentionally NOT here — the Dockerfile installs
+# the CPU-only wheels first via the PyTorch CPU index (the default index
+# would pull multi-GB CUDA wheels).

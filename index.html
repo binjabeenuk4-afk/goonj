@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Goonj — Free Voice Studio | Free AI Text to Speech</title>
 <meta name="description" content="Goonj is a free, unlimited AI voice studio. Turn text into natural speech with 70+ voices including Urdu, English and Hindi. No signup, no API key, no paywall.">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <header class="topbar">
@@ -76,12 +76,25 @@
   </section>
 
   <section id="tab-clone" class="panel hidden">
-    <div class="card"><h3>Voice cloning — coming soon</h3>
-    <p>Voice cloning is not part of this build. When it arrives it will be clearly labeled and will never be faked. For now, enjoy 70+ built-in neural voices in the Studio and Podcast tabs.</p></div>
+    <div class="card">
+      <h3>Clone a voice</h3>
+      <p class="hint">Upload a 6&ndash;30 second clear recording of a single voice (WAV, MP3 or M4A).
+      We&rsquo;ll turn it into a reusable voice for the Studio tab.</p>
+      <p class="consent">Only clone voices you own or have permission to use.</p>
+      <label class="block">Voice name<input type="text" id="cloneName" maxlength="40" placeholder="e.g. My narrator"></label>
+      <label class="block">Sample audio<input type="file" id="cloneFile" accept="audio/*"></label>
+      <p id="cloneFileInfo" class="hint"></p>
+      <div class="row">
+        <button id="cloneCreateBtn" class="primary">Create voice</button>
+      </div>
+      <p id="cloneStatus" class="status" role="status"></p>
+      <h3>My cloned voices</h3>
+      <div id="cloneList"><p class="hint">No cloned voices yet.</p></div>
+    </div>
   </section>
 </main>
 <footer><p>Goonj synthesizes speech on its free voice service — no account, no key, no cost.</p></footer>
 <script src="voices.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

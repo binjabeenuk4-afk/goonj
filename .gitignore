@@ -1,0 +1,9 @@
+# Local-only artifacts — never commit these to the repo.
+# The OpenVoice converter checkpoint (~125 MB) is downloaded at Docker build
+# time (see Dockerfile), not stored in git.
+backend/models/
+backend/cloned_voices/
+backend/outputs/
+__pycache__/
+*.pyc
+venv/

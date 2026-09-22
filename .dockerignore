@@ -1,0 +1,15 @@
+# Build / runtime junk — never ship these into the Space image
+venv/
+backend/__pycache__/
+backend/openvoice/__pycache__/
+backend/outputs/
+# OpenVoice converter checkpoint (~125 MB) is downloaded at BUILD time
+# (Dockerfile RUN ensure_models), never baked in from a dev machine.
+backend/models/
+backend/cloned_voices/
+__pycache__/
+*.pyc
+start-goonj.sh
+*.log
+.git/
+.gitignore

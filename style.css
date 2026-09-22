@@ -11,6 +11,13 @@ main{max-width:900px;margin:0 auto;padding:20px}
 label{font-size:13px;color:var(--mut);display:flex;flex-direction:column;gap:6px}label.block{margin-bottom:12px}
 select,textarea{background:#0d1322;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font-size:14px;width:100%}
 textarea{resize:vertical;line-height:1.5}select:focus,textarea:focus{outline:2px solid var(--acc1);border-color:transparent}
+input[type=text]{background:#0d1322;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font-size:14px;width:100%}
+input[type=text]:focus{outline:2px solid var(--acc1);border-color:transparent}
+input[type=file]{color:var(--mut);font-size:14px}
+.consent{font-size:13px;color:#ffd9a0;background:rgba(255,180,80,.08);border:1px solid rgba(255,180,80,.35);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+.clone-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#0d1322;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:15px}
+button.ghost.danger{border-color:#7a2e2e;color:#ff9c9c;padding:8px 14px;font-size:13px}
+.card h3{margin:18px 0 10px}.card h3:first-child{margin-top:0}
 .slider{min-width:150px;flex:1}input[type=range]{width:100%;accent-color:var(--acc1)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}.chips-label{font-size:13px;color:var(--mut)}
 .chips button{background:#0d1322;border:1px dashed var(--line);color:var(--acc1);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px}.chips button:hover{border-style:solid}

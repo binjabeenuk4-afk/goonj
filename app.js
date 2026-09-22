@@ -15,6 +15,16 @@ const fmtHz = v => (v >= 0 ? "+" : "") + v + "Hz";
 
 function voiceById(id) { return window.GOONJ_VOICES.find(v => v.id === id); }
 
+/* ---------- Cloned voices ---------- */
+let clonedVoices = []; // [{voice_id, name, created}]
+async function loadClonedVoices() {
+  try { const d = await apiGet("/api/clone/voices"); clonedVoices = d.voices || []; }
+  catch (e) { clonedVoices = []; } // fail-open: cloning UI just stays empty
+}
+function anyVoiceById(id) {
+  return voiceById(id) || clonedVoices.find(v => v.voice_id === id);
+}
+
 /* ---------- API helpers ---------- */
 async function apiPost(path, payload) {
   let res;
@@ -75,6 +85,16 @@ function audioDuration(url) { return new Promise(res => { const a = new Audio();
 
 /* ---------- UI helpers ---------- */
 function fillVoiceSelect(sel, defId) {
+  sel.innerHTML = "";
+  if (clonedVoices.length) {
+    const og = document.createElement("optgroup"); og.label = "My Cloned Voices";
+    for (const v of clonedVoices) {
+      const o = document.createElement("option"); o.value = v.voice_id;
+      o.textContent = `${v.name} (cloned)`;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
   const langs = {};
   for (const v of window.GOONJ_VOICES) { (langs[v.language] = langs[v.language] || []).push(v); }
   for (const lang of Object.keys(langs).sort()) {
@@ -88,6 +108,11 @@ function fillVoiceSelect(sel, defId) {
     }
     sel.appendChild(og);
   }
+}
+function refillVoiceSelects() {
+  fillVoiceSelect($("voiceSelect"), "ur-PK-AsadNeural");
+  fillVoiceSelect($("podVoice1"), "en-US-GuyNeural");
+  fillVoiceSelect($("podVoice2"), "en-US-AriaNeural");
 }
 function setStatus(el, msg, isErr) { el.textContent = msg; el.classList.toggle("err", !!isErr); }
 async function finishResult(dl, ids, warnText) {
@@ -107,7 +132,7 @@ async function onGenerateStudio() {
   if (!text) { setStatus($("status"), "Please enter some text first.", true); return; }
   if (text.length > 60000) { setStatus($("status"), "Text is too long (max 60,000 characters).", true); return; }
   const voiceId = $("voiceSelect").value;
-  if (!voiceById(voiceId)) { setStatus($("status"), "Please pick a voice.", true); return; }
+  if (!anyVoiceById(voiceId)) { setStatus($("status"), "Please pick a voice.", true); return; }
   const rate = fmtPct(+$("rateRange").value), pitch = fmtHz(+$("pitchRange").value);
   busy = true; $("generateBtn").disabled = true; $("result").classList.add("hidden");
   $("progressWrap").classList.remove("hidden");
@@ -139,7 +164,7 @@ async function onGeneratePodcast() {
   if (!lines.length) { setStatus($("podStatus"), "Add at least one 'Speaker 1:' / 'Speaker 2:' line.", true); return; }
   if (script.length > 60000) { setStatus($("podStatus"), "Script is too long (max 60,000 characters).", true); return; }
   const v1 = $("podVoice1").value, v2 = $("podVoice2").value;
-  if (!voiceById(v1) || !voiceById(v2)) { setStatus($("podStatus"), "Please pick both speaker voices.", true); return; }
+  if (!anyVoiceById(v1) || !anyVoiceById(v2)) { setStatus($("podStatus"), "Please pick both speaker voices.", true); return; }
   busy = true; $("podGenerate").disabled = true; $("podResult").classList.add("hidden");
   $("podProgressWrap").classList.remove("hidden");
   try {
@@ -161,10 +186,63 @@ async function onGeneratePodcast() {
   finally { busy = false; $("podGenerate").disabled = false; }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  fillVoiceSelect($("voiceSelect"), "ur-PK-AsadNeural");
-  fillVoiceSelect($("podVoice1"), "en-US-GuyNeural");
-  fillVoiceSelect($("podVoice2"), "en-US-AriaNeural");
+/* ---------- Voice cloning tab ---------- */
+let cloneFileDur = NaN;
+function renderCloneList() {
+  const box = $("cloneList");
+  box.innerHTML = "";
+  if (!clonedVoices.length) { box.innerHTML = '<p class="hint">No cloned voices yet.</p>'; return; }
+  for (const v of clonedVoices) {
+    const row = document.createElement("div"); row.className = "clone-row";
+    const nm = document.createElement("span"); nm.textContent = v.name;
+    const del = document.createElement("button"); del.className = "ghost danger";
+    del.textContent = "Delete"; del.type = "button";
+    del.addEventListener("click", () => deleteClone(v));
+    row.appendChild(nm); row.appendChild(del); box.appendChild(row);
+  }
+}
+async function deleteClone(v) {
+  if (!confirm(`Delete the cloned voice "${v.name}"?`)) return;
+  setStatus($("cloneStatus"), "Deleting…");
+  try {
+    const res = await fetch(API_BASE + "/api/clone/" + encodeURIComponent(v.voice_id), { method: "DELETE" });
+    if (!res.ok) throw new Error("Delete failed (" + res.status + ").");
+    await loadClonedVoices(); renderCloneList(); refillVoiceSelects();
+    setStatus($("cloneStatus"), "Deleted.");
+  } catch (e) { setStatus($("cloneStatus"), "Failed: " + e.message, true); }
+}
+async function createClone() {
+  const file = $("cloneFile").files[0];
+  const name = $("cloneName").value.trim();
+  if (!file) { setStatus($("cloneStatus"), "Please choose an audio file first.", true); return; }
+  if (!name) { setStatus($("cloneStatus"), "Please give the voice a name.", true); return; }
+  if (!(cloneFileDur >= 6 && cloneFileDur <= 30)) {
+    setStatus($("cloneStatus"), "Sample must be 6–30 seconds long.", true); return;
+  }
+  if (file.size > 5 * 1024 * 1024) { setStatus($("cloneStatus"), "File too large (max 5 MB).", true); return; }
+  const btn = $("cloneCreateBtn"); btn.disabled = true;
+  setStatus($("cloneStatus"), "Creating voice — this takes ~30 seconds…");
+  try {
+    const fd = new FormData();
+    fd.append("audio", file, file.name);
+    fd.append("name", name);
+    let res;
+    try { res = await fetch(API_BASE + "/api/clone", { method: "POST", body: fd }); }
+    catch (e) { throw new Error("Could not reach the Goonj voice service."); }
+    let data = null; try { data = await res.json(); } catch (e) { /* non-JSON */ }
+    if (!res.ok) throw new Error((data && data.detail) || ("Request failed (" + res.status + ")."));
+    $("cloneName").value = ""; $("cloneFile").value = ""; cloneFileDur = NaN;
+    $("cloneFileInfo").textContent = "";
+    await loadClonedVoices(); renderCloneList(); refillVoiceSelects();
+    setStatus($("cloneStatus"), `Voice "${data.name}" created — find it under "My Cloned Voices" in the Studio tab.`);
+  } catch (e) { setStatus($("cloneStatus"), "Failed: " + e.message, true); }
+  finally { btn.disabled = false; }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadClonedVoices();
+  refillVoiceSelects();
+  renderCloneList();
   document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.remove("active")); t.classList.add("active");
     document.querySelectorAll(".panel").forEach(p => p.classList.add("hidden"));
@@ -182,4 +260,23 @@ document.addEventListener("DOMContentLoaded", () => {
   $("generateBtn").addEventListener("click", onGenerateStudio);
   $("podSample").addEventListener("click", () => { $("podScript").value = "Speaker 1: Assalam o Alaikum and welcome to the Goonj podcast!\nSpeaker 2: Thank you! Today we are testing dual-speaker voices. [sans] It sounds quite natural.\nSpeaker 1: It really does. [ruko] Let us hear how the second voice responds.\nSpeaker 2: I am the second speaker, and I approve this message."; });
   $("podGenerate").addEventListener("click", onGeneratePodcast);
+  // Voice cloning tab
+  $("cloneFile").addEventListener("change", () => {
+    const file = $("cloneFile").files[0];
+    cloneFileDur = NaN;
+    if (!file) { $("cloneFileInfo").textContent = ""; return; }
+    const url = URL.createObjectURL(file);
+    const a = new Audio(); a.preload = "metadata";
+    a.onloadedmetadata = () => {
+      cloneFileDur = a.duration;
+      URL.revokeObjectURL(url);
+      const ok = cloneFileDur >= 6 && cloneFileDur <= 30;
+      $("cloneFileInfo").textContent =
+        `Duration: ${cloneFileDur.toFixed(1)}s — ` + (ok ? "good, within 6–30s." : "must be 6–30 seconds.");
+      $("cloneFileInfo").style.color = ok ? "" : "#ff8f8f";
+    };
+    a.onerror = () => { URL.revokeObjectURL(url); $("cloneFileInfo").textContent = "Could not read this audio file."; };
+    a.src = url;
+  });
+  $("cloneCreateBtn").addEventListener("click", createClone);
 });
