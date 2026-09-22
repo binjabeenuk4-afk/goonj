@@ -17,12 +17,13 @@ import io
 import logging
 import os
 import re
+import tempfile
 import time
 import uuid
 from pathlib import Path
 
 import edge_tts
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -345,7 +346,7 @@ def _render_chunk(chunk: str, voice_id: str, rate: str, pitch: str) -> bytes:
 
 
 def _job_new(voice_id: str, text: str, rate: str, pitch: str,
-             total_say: int) -> dict:
+             total_say: int, clone_voice_id: str | None = None) -> dict:
     job_id = uuid.uuid4().hex
     job = {
         "job_id": job_id,
@@ -357,6 +358,7 @@ def _job_new(voice_id: str, text: str, rate: str, pitch: str,
         "error": None,
         "characters": len(text),
         "voice_id": voice_id,
+        "clone_voice_id": clone_voice_id,  # set when rendering for a clone
         "warnings": [],
     }
     with _jobs_lock:
@@ -417,7 +419,22 @@ def _run_items_job(job_id: str, items: list) -> None:
             done += 1
             _job_set(job_id, chunks_done=done,
                      progress_pct=round(done / total * 100) if total else 100)
-        _save_job_audio(job_id, out.getvalue())
+        merged = out.getvalue()
+        # Cloned voice: tone-convert the merged base audio. A conversion
+        # failure fails the job loudly — never silently ship the base voice.
+        with _jobs_lock:
+            clone_id = (_jobs.get(job_id) or {}).get("clone_voice_id")
+        if clone_id:
+            _job_set(job_id, progress_pct=99)  # converting… (not stuck)
+            try:
+                from backend import voice_clone  # lazy: torch stays out of normal path
+                merged = voice_clone.convert_mp3_voice(merged, clone_id)
+            except Exception as e:  # noqa: BLE001
+                log.warning("job %s voice-clone conversion failed: %s", job_id, e)
+                _job_set(job_id, status="error",
+                         error="Voice cloning failed on this audio. Please try again.")
+                return
+        _save_job_audio(job_id, merged)
     except Exception as e:  # noqa: BLE001 - never leak a stack trace
         log.warning("job %s failed: %s", job_id, e)
         _job_set(job_id, status="error",
@@ -431,7 +448,11 @@ def _sanitize(name: str) -> str:
 async def _check_voice_params(voice_id: str, rate: str, pitch: str) -> None:
     """Validate voice_id/rate/pitch. Raises HTTPException(400) on bad input."""
     await load_voices()
-    if voice_id not in _voice_ids():
+    if voice_id.startswith("clone_"):
+        from backend import voice_clone  # lazy: keeps torch out of normal startup
+        if not voice_clone.get_clone(voice_id):
+            raise HTTPException(status_code=400, detail="Unknown cloned voice.")
+    elif voice_id not in _voice_ids():
         raise HTTPException(status_code=400, detail="Unknown voice_id.")
     if not RATE_RE.match(rate or ""):
         raise HTTPException(status_code=400, detail="Invalid rate. Use e.g. +0%, -20%, +50%.")
@@ -441,6 +462,41 @@ async def _check_voice_params(voice_id: str, rate: str, pitch: str) -> None:
     pitch_n = int(pitch[1:-2])
     if not (-100 <= rate_n <= 100) or not (-100 <= pitch_n <= 100):
         raise HTTPException(status_code=400, detail="rate and pitch must be within -100..+100.")
+
+
+# --- Voice cloning: clone ids render with a base neural voice, then the ---
+# --- merged audio is tone-converted to the cloned voice (see voice_clone) --
+# Female base voices convert most recognizably (OpenVoice trains on them);
+# male base voices can come out unrecognizable — hence female defaults.
+_CLONE_BASE_VOICES = {
+    "ur": "ur-PK-UzmaNeural",  # Arabic-script text -> Urdu base
+    "hi": "hi-IN-SwaraNeural",  # Devanagari text -> Hindi base
+    "en": "en-US-AriaNeural",  # everything else -> English base
+}
+
+
+def _pick_clone_base_voice(text: str) -> str:
+    if re.search(r"[\u0600-\u06FF]", text):
+        return _CLONE_BASE_VOICES["ur"]
+    if re.search(r"[\u0900-\u097F]", text):
+        return _CLONE_BASE_VOICES["hi"]
+    return _CLONE_BASE_VOICES["en"]
+
+
+def _resolve_render_voice(voice_id: str, text: str) -> tuple[str, str | None]:
+    """Return (render_voice_id, clone_voice_id).
+
+    Normal voices render as themselves (clone_voice_id None). A cloned
+    voice renders its chunks with a pronunciation base voice; the worker
+    converts the merged audio to the clone afterwards.
+    """
+    if not voice_id.startswith("clone_"):
+        return voice_id, None
+    base = _pick_clone_base_voice(text)
+    if base not in _voice_ids():
+        # base voice unavailable (e.g. voice list failed): fall back to any
+        base = next(iter(_voice_ids()), voice_id)
+    return base, voice_id
 
 
 class TTSRequest(BaseModel):
@@ -465,7 +521,7 @@ PUBLIC_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=PUBLIC_ORIGINS,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
 )
@@ -578,9 +634,11 @@ async def tts(req: TTSRequest, request: Request):
         )
     await _check_voice_params(req.voice_id, req.rate, req.pitch)
 
-    items = _build_tts_items(text, req.voice_id, req.rate, req.pitch,
-                           req.emotions)
-    job = _job_new(req.voice_id, text, req.rate, req.pitch, _say_count(items))
+    render_voice, clone_voice_id = _resolve_render_voice(req.voice_id, text)
+    items = _build_tts_items(text, render_voice, req.rate, req.pitch,
+                             req.emotions)
+    job = _job_new(req.voice_id, text, req.rate, req.pitch, _say_count(items),
+                   clone_voice_id=clone_voice_id)
     worker = _threading.Thread(
         target=_run_items_job,
         args=(job["job_id"], items),
@@ -618,9 +676,7 @@ async def podcast(req: PodcastRequest, request: Request):
         if not req.voice2:
             raise HTTPException(status_code=400,
                                 detail="Pick a Guest voice for dual-speaker mode.")
-        await load_voices()
-        if req.voice2 not in _voice_ids():
-            raise HTTPException(status_code=400, detail="Unknown Guest voice.")
+        await _check_voice_params(req.voice2, req.rate, req.pitch)
     script = (req.script or "").strip()
     if not script:
         raise HTTPException(status_code=400, detail="Script is empty.")
@@ -650,8 +706,22 @@ async def podcast(req: PodcastRequest, request: Request):
                     detail=f"Line {n} has no text after the speaker name.",
                 )
             segments.append((req.voice1 if who in ("host", "1") else req.voice2, said))
-    items = _build_podcast_items(segments, req.rate, req.pitch, req.emotions)
-    job = _job_new(req.voice1, script, req.rate, req.pitch, _say_count(items))
+    # Cloned speaker voices render with a base voice, then get converted.
+    # v1 converts the whole job to ONE cloned voice; two different clones
+    # in one podcast would mis-convert, so we refuse that loudly.
+    clone_ids = {vid for vid, _ in segments if vid.startswith("clone_")}
+    if len(clone_ids) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Podcast v1 supports one cloned voice per job — "
+                   "use the same cloned voice for both speakers.",
+        )
+    clone_voice_id = next(iter(clone_ids), None)
+    render_segments = [(_resolve_render_voice(vid, line)[0], line)
+                       for vid, line in segments]
+    items = _build_podcast_items(render_segments, req.rate, req.pitch, req.emotions)
+    job = _job_new(req.voice1, script, req.rate, req.pitch, _say_count(items),
+                   clone_voice_id=clone_voice_id)
     worker = _threading.Thread(
         target=_run_items_job,
         args=(job["job_id"], items),
@@ -659,6 +729,57 @@ async def podcast(req: PodcastRequest, request: Request):
     )
     worker.start()
     return {"job_id": job["job_id"]}
+
+
+# --- Voice cloning -------------------------------------------------------
+# POST /api/clone accepts a 6-30s sample and registers a reusable voice.
+# NOTE: cloned voices are stored on local disk, which is ephemeral on
+# Railway — they vanish on redeploy. Models (backend/models/) are baked
+# into the Docker image and survive.
+
+
+@app.post("/api/clone")
+async def clone_create(request: Request, audio: UploadFile = File(...),
+                       name: str = Form(...)):
+    """Upload a 6-30s voice sample -> {voice_id, name}."""
+    from backend import voice_clone  # lazy: torch stays out of normal startup
+    data = await audio.read()
+    if len(data) > voice_clone.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Audio file too large (max 5 MB).")
+    if len(data) < 1000:
+        raise HTTPException(status_code=400, detail="Audio file is empty.")
+    # sanitize filename; only the extension matters for ffmpeg probing
+    ext = os.path.splitext(audio.filename or "")[1].lower()
+    if ext not in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
+        ext = ".bin"
+    tmp_path = Path(tempfile.gettempdir()) / f"clone_upload_{uuid.uuid4().hex}{ext}"
+    try:
+        tmp_path.write_bytes(data)
+        try:
+            info = await asyncio.to_thread(
+                voice_clone.create_cloned_voice, tmp_path, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except RuntimeError as e:
+            log.warning("clone creation failed: %s", e)
+            raise HTTPException(status_code=502, detail=str(e))
+        return info
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@app.get("/api/clone/voices")
+async def clone_list():
+    from backend import voice_clone
+    return {"voices": voice_clone.list_cloned_voices()}
+
+
+@app.delete("/api/clone/{voice_id}")
+async def clone_delete(voice_id: str):
+    from backend import voice_clone
+    if not voice_clone.delete_cloned_voice(voice_id):
+        raise HTTPException(status_code=404, detail="Unknown cloned voice.")
+    return {"ok": True}
 
 
 @app.get("/api/job/{job_id}")
